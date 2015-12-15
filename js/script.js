@@ -1,4 +1,4 @@
-var buyNow = true;
+
 
 
 var productsUrl = 'https://api.import.io/store/data/2a4165bc-139a-46f5-b33a-b349552be856/'+
@@ -12,50 +12,14 @@ var template = Handlebars.compile(source);
 
 var resolverUrl = 'http://ra-tracker.parseapp.com/resolve?url=';
 
-function swapLinks(){
-    $(".product a").each(
-        function(){
-            var outUrl = $(this).attr('href');
-            var outUrlEnc = encodeURI(outUrl);
-            var that = this;
-            $.get(resolverUrl + outUrlEnc,function(res){
-                var ttTarget = extractDomain(res.Location);
-                if(ttDomains[ttTarget]){
-                    console.log(ttTarget);
-                    var $btn = $("<button></button>");
-                    $btn.addClass("btn btn-primary");
-                    $btn.attr({"type":"button"});
-                    $btn.text("Buy Now");
-                    $btn.click(function(){
-                        var t = window.screenTop - 20;
-                        var l = window.screenLeft + window.outerWidth - 400;
-                        console.log(t + "," + l);
-                        window.open(
-                            getTwoTapUrl(encodeURIComponent(res.Location)),
-                            'ttbuy',
-                            'width=420, height=560, menubar=no, resizable=no, titlebar=no, top='+t+', left='+l
-                        )});
-                    $(that).parent().append($btn);
-                }
-            })
-        });
-}
 var ttDomains = [];
+var pdts = [];
 $(function(){
-
-    if(buyNow){
-
-        $.get(twoTapUrl,function(response){
-            response.forEach(function(d){
-                ttDomains[d.url] = true;
-            });
-        })
-    }
-
-
-    var i = 1;
-    $.get(productsUrl,
-        function(res){
+    $.get(twoTapUrl,function(response){
+        response.forEach(function(d){
+            ttDomains[d.url] = true;
+        });
+        $.get(productsUrl,function(res){
             if(res.results.length > 0){
                 res.results.forEach(function(p){
                     var ctx = {
@@ -65,18 +29,48 @@ $(function(){
                         price:p["ideacontentins_price/_source"],
                         clickUrl:p["ideacontent_link"]
                     };
-                    var html = template(ctx);
-                    $(".products>.row").append(html);
-                    if(i%4==0){
-                        $(".products>.row").append(
-                            "</div><div class=\"row\">"
-                        );
+
+                    if(ctx.price){
+
+                        var outUrlEnc = encodeURI(ctx.clickUrl);
+                        var key = resolverUrl + outUrlEnc;
+
+                        pdts[key]=ctx;
+                        $.get(key,function(resp){
+                            var pdt = pdts[key];
+                            var ttTarget = extractDomain(resp.Location);
+                            if(ttDomains[ttTarget]){
+                                pdt.ttLink = getTwoTapUrl(encodeURIComponent(resp.Location));
+                                renderProduct(pdt);
+                            }
+                        });
                     }
                 })
             }
-            swapLinks();
-        })
+        });
+    });
+
+
 });
+
+
+function renderProduct(ctx){
+
+    var $html = $(template(ctx));
+    var $a = $(".products>.row");
+
+    var $btn = $html.find('button');
+    $btn.click(function(){
+        var t = window.screenTop - 20;
+        var l = window.screenLeft + window.outerWidth - 400;
+
+        window.open(
+            ctx.ttLink,
+            'ttbuy',
+            'width=420, height=560, menubar=no, resizable=no, titlebar=no, top='+t+', left='+l
+        )});
+    $a.append($html);
+}
 
 
 function extractDomain(url) {
@@ -95,8 +89,8 @@ function getTwoTapUrl(productUrl){
          "unique_token=" + token + "&" +
          "confirm_url=/confirm&" +
          "products=" + productUrl + "&" +
-         //"test_mode=fake_confirm&" +
-         "affiliate_links=product_1_affiliate_url,product_2_affiliate_url";
+         "test_mode=fake_confirm&";
+         //"affiliate_links=product_1_affiliate_url,product_2_affiliate_url";
 }
 
 
